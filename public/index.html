@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aria — Research Assistant</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔬 Aria</h1>
+            <p class="subtitle">Your AI Research Assistant</p>
+        </header>
+
+        <div class="chat-box" id="chatBox">
+            <div class="message bot-message">
+                <div class="message-content">
+                    👋 Hi! I'm <strong>Aria</strong>, your research assistant. Ask me anything and I'll research it for you using the web and my knowledge base.
+                </div>
+            </div>
+        </div>
+
+        <form id="queryForm" class="input-area">
+            <input
+                type="text"
+                id="queryInput"
+                placeholder="Ask me to research any topic..."
+                autocomplete="off"
+                required
+            />
+            <button type="submit" id="sendBtn">
+                <span class="btn-text">Send</span>
+                <span class="btn-loader hidden">⏳</span>
+            </button>
+        </form>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
