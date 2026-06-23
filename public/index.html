@@ -1,41 +1,1246 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Aria — Research Assistant</title>
-    <link rel="stylesheet" href="style.css">
-</head>
-<body>
-    <div class="container">
-        <header>
-            <h1>🔬 Aria</h1>
-            <p class="subtitle">Your AI Research Assistant</p>
-        </header>
 
-        <div class="chat-box" id="chatBox">
-            <div class="message bot-message">
-                <div class="message-content">
-                    👋 Hi! I'm <strong>Aria</strong>, your research assistant. Ask me anything and I'll research it for you using the web and my knowledge base.
-                </div>
+    <!-- Markdown renderer -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+    <!-- Code syntax highlighting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css"
+    />
+
+    <style>
+      /* ── Reset ─────────────────────────────────────────── */
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      /* ── Variables ─────────────────────────────────────── */
+      :root {
+        --bg: #0f0f0f;
+        --surface: #1a1a1a;
+        --surface2: #222;
+        --border: #2a2a2a;
+        --border2: #333;
+        --text: #e8e8e8;
+        --text2: #aaa;
+        --text3: #666;
+        --accent: #ffffff;
+        --accent-dim: #e8e8e8;
+        --user-bg: #1e2a3a;
+        --user-border: #2a3f5a;
+        --green: #4caf50;
+        --red: #ef5350;
+        --sidebar-w: 260px;
+        --radius: 12px;
+        --font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --mono: "SF Mono", "Fira Code", "Consolas", monospace;
+      }
+
+      /* ── Base ───────────────────────────────────────────── */
+      html,
+      body {
+        height: 100%;
+      }
+
+      body {
+        font-family: var(--font);
+        background: var(--bg);
+        color: var(--text);
+        display: flex;
+        overflow: hidden;
+      }
+
+      /* ── Sidebar ────────────────────────────────────────── */
+      .sidebar {
+        width: var(--sidebar-w);
+        min-width: var(--sidebar-w);
+        height: 100vh;
+        background: var(--surface);
+        border-right: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        transition: transform 0.25s ease;
+      }
+
+      .sidebar-header {
+        padding: 1.25rem 1rem 1rem;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .sidebar-logo {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--text);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.85rem;
+      }
+
+      .btn-new {
+        width: 100%;
+        background: transparent;
+        border: 1px solid var(--border2);
+        border-radius: 8px;
+        color: var(--text);
+        padding: 0.6rem 1rem;
+        font-size: 13.5px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        transition: background 0.15s;
+      }
+
+      .btn-new:hover {
+        background: var(--surface2);
+      }
+
+      .sidebar-section {
+        padding: 0.6rem 0.75rem 0.2rem;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text3);
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+      }
+
+      .conv-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 0.25rem 0.5rem;
+        scrollbar-width: thin;
+        scrollbar-color: var(--border) transparent;
+      }
+
+      .conv-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.55rem 0.75rem;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: background 0.15s;
+        position: relative;
+        group: true;
+      }
+
+      .conv-item:hover {
+        background: var(--surface2);
+      }
+      .conv-item.active {
+        background: var(--surface2);
+      }
+
+      .conv-title {
+        flex: 1;
+        font-size: 13.5px;
+        color: var(--text2);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        line-height: 1.4;
+      }
+
+      .conv-item.active .conv-title {
+        color: var(--text);
+      }
+
+      .conv-delete {
+        display: none;
+        background: transparent;
+        border: none;
+        color: var(--text3);
+        font-size: 14px;
+        cursor: pointer;
+        padding: 2px 4px;
+        border-radius: 4px;
+        line-height: 1;
+      }
+
+      .conv-item:hover .conv-delete {
+        display: block;
+      }
+      .conv-delete:hover {
+        color: var(--red);
+      }
+
+      /* ── Main layout ───────────────────────────────────── */
+      .main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        overflow: hidden;
+        position: relative;
+      }
+
+      /* ── Top bar ───────────────────────────────────────── */
+      .topbar {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 0.85rem 1.5rem;
+        border-bottom: 1px solid var(--border);
+        background: var(--bg);
+        min-height: 56px;
+      }
+
+      .menu-btn {
+        display: none;
+        background: transparent;
+        border: none;
+        color: var(--text2);
+        font-size: 1.2rem;
+        cursor: pointer;
+        padding: 4px;
+      }
+
+      .topbar-title {
+        font-size: 15px;
+        font-weight: 500;
+        color: var(--text);
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      /* ── Chat area ─────────────────────────────────────── */
+      .chat-area {
+        flex: 1;
+        overflow-y: auto;
+        padding: 2rem 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+        scrollbar-width: thin;
+        scrollbar-color: var(--border) transparent;
+      }
+
+      /* ── Empty state ───────────────────────────────────── */
+      .empty-state {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+        color: var(--text3);
+        text-align: center;
+        padding: 2rem;
+      }
+
+      .empty-icon {
+        font-size: 2.5rem;
+      }
+      .empty-title {
+        font-size: 1.1rem;
+        font-weight: 500;
+        color: var(--text2);
+      }
+      .empty-sub {
+        font-size: 13.5px;
+      }
+
+      .suggestions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        justify-content: center;
+        margin-top: 0.5rem;
+      }
+
+      .suggestion {
+        background: var(--surface);
+        border: 1px solid var(--border2);
+        border-radius: 20px;
+        padding: 0.45rem 1rem;
+        font-size: 13px;
+        color: var(--text2);
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+
+      .suggestion:hover {
+        background: var(--surface2);
+        color: var(--text);
+        border-color: var(--text3);
+      }
+
+      /* ── Messages ──────────────────────────────────────── */
+      .message {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+        max-width: 760px;
+        width: 100%;
+        margin: 0 auto;
+        animation: msgIn 0.2s ease;
+      }
+
+      .msg-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 12.5px;
+        color: var(--text3);
+        font-weight: 500;
+      }
+
+      .msg-avatar {
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        flex-shrink: 0;
+      }
+
+      .msg-avatar.user {
+        background: var(--user-border);
+      }
+      .msg-avatar.agent {
+        background: #2a2a3a;
+      }
+
+      /* User message */
+      .message.user .msg-body {
+        background: var(--user-bg);
+        border: 1px solid var(--user-border);
+        border-radius: var(--radius);
+        padding: 0.85rem 1.1rem;
+        font-size: 15px;
+        line-height: 1.6;
+        color: var(--text);
+      }
+
+      /* Agent message */
+      .message.agent .msg-body {
+        background: transparent;
+        font-size: 15px;
+        line-height: 1.75;
+        color: var(--text);
+      }
+
+      /* ── Progress indicator ────────────────────────────── */
+      .progress-area {
+        max-width: 760px;
+        width: 100%;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+      }
+
+      .tool-row {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        font-size: 13px;
+        color: var(--text3);
+        padding: 0.2rem 0;
+        animation: fadeIn 0.2s ease;
+      }
+
+      .tool-row.done {
+        color: #4a9e4a;
+      }
+
+      .spinner {
+        width: 14px;
+        height: 14px;
+        border: 2px solid var(--border2);
+        border-top-color: var(--text2);
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+        flex-shrink: 0;
+      }
+
+      .tool-row.done .spinner {
+        border: none;
+        width: 14px;
+        height: 14px;
+        animation: none;
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      /* ── Markdown content styling ──────────────────────── */
+      .msg-body h1 {
+        font-size: 1.45rem;
+        font-weight: 600;
+        color: #fff;
+        margin: 0 0 0.5rem;
+        line-height: 1.3;
+      }
+
+      .msg-body h2 {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #ddd;
+        margin: 1.75rem 0 0.6rem;
+        padding-bottom: 0.3rem;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .msg-body h3 {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #ccc;
+        margin: 1.25rem 0 0.4rem;
+      }
+
+      .msg-body p {
+        margin: 0 0 0.85rem;
+      }
+      .msg-body p:last-child {
+        margin-bottom: 0;
+      }
+
+      .msg-body ul,
+      .msg-body ol {
+        padding-left: 1.5rem;
+        margin: 0.5rem 0 0.85rem;
+      }
+
+      .msg-body li {
+        margin-bottom: 0.3rem;
+        line-height: 1.65;
+      }
+
+      .msg-body blockquote {
+        border-left: 3px solid var(--border2);
+        margin: 0.85rem 0;
+        padding: 0.5rem 0 0.5rem 1rem;
+        color: var(--text2);
+        font-style: italic;
+      }
+
+      .msg-body strong {
+        color: #fff;
+        font-weight: 600;
+      }
+      .msg-body em {
+        color: var(--text2);
+      }
+
+      .msg-body a {
+        color: #7eb8f7;
+        text-decoration: none;
+      }
+      .msg-body a:hover {
+        text-decoration: underline;
+      }
+
+      .msg-body table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 1rem 0;
+        font-size: 13.5px;
+      }
+
+      .msg-body th {
+        background: var(--surface2);
+        padding: 0.5rem 0.75rem;
+        text-align: left;
+        font-weight: 600;
+        border: 1px solid var(--border2);
+        color: var(--text);
+      }
+
+      .msg-body td {
+        padding: 0.45rem 0.75rem;
+        border: 1px solid var(--border);
+        color: var(--text2);
+      }
+
+      .msg-body tr:nth-child(even) td {
+        background: rgba(255, 255, 255, 0.02);
+      }
+
+      .msg-body code {
+        font-family: var(--mono);
+        font-size: 13px;
+        background: var(--surface2);
+        padding: 2px 6px;
+        border-radius: 4px;
+        color: #e8b86d;
+      }
+
+      .msg-body pre {
+        background: #161b22;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        overflow-x: auto;
+        margin: 1rem 0;
+      }
+
+      .msg-body pre code {
+        background: transparent;
+        color: inherit;
+        padding: 1rem 1.25rem;
+        display: block;
+        font-size: 13px;
+        line-height: 1.6;
+      }
+
+      /* ── Cursor ────────────────────────────────────────── */
+      .cursor {
+        display: inline-block;
+        width: 2px;
+        height: 1em;
+        background: var(--text);
+        margin-left: 2px;
+        vertical-align: text-bottom;
+        animation: blink 1s step-end infinite;
+      }
+
+      /* ── Input area ────────────────────────────────────── */
+      .input-area {
+        padding: 1rem 1.5rem 1.25rem;
+        background: var(--bg);
+        border-top: 1px solid var(--border);
+      }
+
+      .input-box {
+        max-width: 760px;
+        margin: 0 auto;
+        position: relative;
+      }
+
+      .input-wrap {
+        display: flex;
+        align-items: flex-end;
+        background: var(--surface);
+        border: 1px solid var(--border2);
+        border-radius: 14px;
+        padding: 0.65rem 0.65rem 0.65rem 1.1rem;
+        gap: 0.5rem;
+        transition: border-color 0.2s;
+      }
+
+      .input-wrap:focus-within {
+        border-color: #444;
+      }
+
+      textarea {
+        flex: 1;
+        background: transparent;
+        border: none;
+        outline: none;
+        color: var(--text);
+        font-family: var(--font);
+        font-size: 15px;
+        line-height: 1.6;
+        resize: none;
+        max-height: 160px;
+        overflow-y: auto;
+        scrollbar-width: none;
+      }
+
+      textarea::placeholder {
+        color: var(--text3);
+      }
+      textarea:disabled {
+        opacity: 0.5;
+      }
+
+      .send-btn {
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
+        background: var(--accent);
+        border: none;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        transition: opacity 0.15s;
+        align-self: flex-end;
+      }
+
+      .send-btn:hover {
+        opacity: 0.85;
+      }
+      .send-btn:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+      }
+
+      .send-btn svg {
+        width: 16px;
+        height: 16px;
+        fill: none;
+        stroke: #000;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .input-hint {
+        text-align: center;
+        font-size: 11.5px;
+        color: var(--text3);
+        margin-top: 0.5rem;
+      }
+
+      .upload-btn {
+        background: transparent;
+        border: none;
+        color: var(--text3);
+        cursor: pointer;
+        padding: 4px 6px;
+        border-radius: 6px;
+        transition: color 0.15s;
+        align-self: flex-end;
+        margin-bottom: 2px;
+      }
+      .upload-btn:hover {
+        color: var(--text2);
+      }
+      .upload-btn svg {
+        width: 18px;
+        height: 18px;
+      }
+
+      .upload-toast {
+        position: fixed;
+        bottom: 1.5rem;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--surface2);
+        border: 1px solid var(--border2);
+        border-radius: 10px;
+        padding: 0.6rem 1.2rem;
+        font-size: 13.5px;
+        color: var(--text);
+        z-index: 200;
+        animation: fadeIn 0.2s ease;
+      }
+
+      /* ── Animations ────────────────────────────────────── */
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @keyframes blink {
+        50% {
+          opacity: 0;
+        }
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      @keyframes msgIn {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      /* ── Mobile ────────────────────────────────────────── */
+      @media (max-width: 700px) {
+        .sidebar {
+          position: fixed;
+          left: 0;
+          top: 0;
+          bottom: 0;
+          z-index: 100;
+          transform: translateX(-100%);
+        }
+        .sidebar.open {
+          transform: translateX(0);
+        }
+        .menu-btn {
+          display: flex;
+        }
+        .chat-area {
+          padding: 1.25rem 1rem;
+        }
+        .input-area {
+          padding: 0.75rem 1rem 1rem;
+        }
+      }
+
+      /* ── Overlay (mobile sidebar) ──────────────────────── */
+      .overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 99;
+      }
+
+      .overlay.show {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Mobile overlay -->
+    <div class="overlay" id="overlay" onclick="closeSidebar()"></div>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">🔬 Aria</div>
+        <button class="btn-new" onclick="newChat()">
+          <span>✏️</span> New research
+        </button>
+      </div>
+      <div class="conv-list" id="convList">
+        <!-- Populated by JS -->
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+      <div class="topbar">
+        <button class="menu-btn" onclick="toggleSidebar()">☰</button>
+        <div class="topbar-title" id="topbarTitle">New Research</div>
+      </div>
+
+      <div class="chat-area" id="chatArea">
+        <!-- Empty state shown initially -->
+        <div class="empty-state" id="emptyState">
+          <div class="empty-icon">🔬</div>
+          <div class="empty-title">What would you like to research?</div>
+          <div class="empty-sub">
+            Ask anything — Aria searches the web and builds on past research
+          </div>
+          <div class="suggestions">
+            <div class="suggestion" onclick="useSuggestion(this)">
+              Benefits of meditation
             </div>
+            <div class="suggestion" onclick="useSuggestion(this)">
+              How do LLMs work?
+            </div>
+            <div class="suggestion" onclick="useSuggestion(this)">
+              India EV market 2025
+            </div>
+            <div class="suggestion" onclick="useSuggestion(this)">
+              Intermittent fasting science
+            </div>
+          </div>
         </div>
+      </div>
 
-        <form id="queryForm" class="input-area">
+      <div class="input-area">
+        <div class="input-box">
+          <div class="input-wrap">
+            <!-- File upload button (add before the textarea) -->
             <input
-                type="text"
-                id="queryInput"
-                placeholder="Ask me to research any topic..."
-                autocomplete="off"
-                required
+              type="file"
+              id="fileInput"
+              style="display: none"
+              accept=".pdf,.docx,.doc,.txt,.md,.csv,.xlsx,.xls,.html"
+              onchange="handleFileUpload(this)"
             />
-            <button type="submit" id="sendBtn">
-                <span class="btn-text">Send</span>
-                <span class="btn-loader hidden">⏳</span>
-            </button>
-        </form>
-    </div>
 
-    <script src="app.js"></script>
-</body>
+            <button
+              class="upload-btn"
+              onclick="$('fileInput').click()"
+              title="Upload document"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+            </button>
+
+            <textarea
+              id="queryInput"
+              placeholder="Research any topic..."
+              rows="1"
+              onkeydown="handleKey(event)"
+              oninput="autoResize(this)"
+            ></textarea>
+            <button
+              class="send-btn"
+              id="sendBtn"
+              onclick="sendMessage()"
+              title="Send"
+            >
+              <svg viewBox="0 0 24 24">
+                <line x1="12" y1="19" x2="12" y2="5" />
+                <polyline points="5 12 12 5 19 12" />
+              </svg>
+            </button>
+          </div>
+          <div class="input-hint">Enter to send · Shift+Enter for new line</div>
+        </div>
+      </div>
+    </main>
+
+    <script>
+      // ── State ───────────────────────────────────────────────
+      const state = {
+        currentConvId: null,
+        isLoading: false,
+        conversations: [],
+      };
+
+      const TOOL_LABELS = {
+        get_current_date: "📅 Getting today's date",
+        search_knowledge_base: "🗃️  Checking past research",
+        search_web: "🔍 Searching the web",
+        read_url: "📄 Reading article",
+        summarise: "✂️  Summarising",
+        save_note: "💾 Saving to knowledge base",
+      };
+
+      // ── DOM helpers ─────────────────────────────────────────
+      const $ = (id) => document.getElementById(id);
+      const el = (tag, cls, html) => {
+        const e = document.createElement(tag);
+        if (cls) e.className = cls;
+        if (html) e.innerHTML = html;
+        return e;
+      };
+
+      // ── marked.js config ────────────────────────────────────
+      marked.setOptions({
+        breaks: true,
+        gfm: true,
+        highlight: (code, lang) => {
+          if (lang && hljs.getLanguage(lang)) {
+            return hljs.highlight(code, { language: lang }).value;
+          }
+          return hljs.highlightAuto(code).value;
+        },
+      });
+
+      // ── Sidebar ─────────────────────────────────────────────
+      function toggleSidebar() {
+        $("sidebar").classList.toggle("open");
+        $("overlay").classList.toggle("show");
+      }
+
+      function closeSidebar() {
+        $("sidebar").classList.remove("open");
+        $("overlay").classList.remove("show");
+      }
+
+      // ── Load conversation list ───────────────────────────────
+      async function loadConversationList() {
+        try {
+          const resp = await fetch("/conversations");
+          const convs = await resp.json();
+          state.conversations = convs;
+          renderSidebar(convs);
+        } catch {}
+      }
+
+      function renderSidebar(convs) {
+        const list = $("convList");
+        list.innerHTML = "";
+
+        if (!convs.length) {
+          list.innerHTML = `<div style="padding:1rem;font-size:13px;color:var(--text3);text-align:center">No past research yet</div>`;
+          return;
+        }
+
+        // Group by date
+        const groups = {};
+        convs.forEach((c) => {
+          const d = new Date(c.updatedAt);
+          const now = new Date();
+          let label;
+          if (d.toDateString() === now.toDateString()) label = "Today";
+          else {
+            const yesterday = new Date(now);
+            yesterday.setDate(now.getDate() - 1);
+            label =
+              d.toDateString() === yesterday.toDateString()
+                ? "Yesterday"
+                : d.toLocaleDateString("en-IN", {
+                    day: "numeric",
+                    month: "short",
+                  });
+          }
+          if (!groups[label]) groups[label] = [];
+          groups[label].push(c);
+        });
+
+        Object.entries(groups).forEach(([label, items]) => {
+          list.appendChild(el("div", "sidebar-section", label));
+          items.forEach((c) => {
+            const item = el(
+              "div",
+              `conv-item${c.id === state.currentConvId ? " active" : ""}`,
+            );
+            item.innerHTML = `
+        <span class="conv-title">${escHtml(c.title)}</span>
+        <button class="conv-delete" onclick="deleteConv(event,'${c.id}')" title="Delete">×</button>
+      `;
+            item.addEventListener("click", () => loadConversation(c.id));
+            list.appendChild(item);
+          });
+        });
+      }
+
+      // ── Load a past conversation ─────────────────────────────
+      async function loadConversation(id) {
+        try {
+          const resp = await fetch(`/conversations/${id}`);
+          const conv = await resp.json();
+
+          state.currentConvId = id;
+          $("emptyState")?.remove();
+          $("topbarTitle").textContent = conv.title || "Research";
+
+          const chatArea = $("chatArea");
+          chatArea.innerHTML = "";
+
+          // Render all messages
+          conv.messages.forEach((msg) => {
+            if (msg.role === "user") appendUserMessage(msg.content);
+            else if (msg.role === "assistant")
+              appendAgentMessage(msg.content, false);
+          });
+
+          scrollToBottom();
+          renderSidebar(state.conversations);
+          closeSidebar();
+        } catch {}
+      }
+
+      // ── Delete conversation ─────────────────────────────────
+      async function deleteConv(e, id) {
+        e.stopPropagation();
+        await fetch(`/conversations/${id}`, { method: "DELETE" });
+        if (state.currentConvId === id) newChat();
+        await loadConversationList();
+      }
+
+      // ── New chat ─────────────────────────────────────────────
+      function newChat() {
+        state.currentConvId = null;
+        $("topbarTitle").textContent = "New Research";
+        $("chatArea").innerHTML = `
+    <div class="empty-state" id="emptyState">
+      <div class="empty-icon">🔬</div>
+      <div class="empty-title">What would you like to research?</div>
+      <div class="empty-sub">Ask anything — Aria searches the web and builds on past research</div>
+      <div class="suggestions">
+        <div class="suggestion" onclick="useSuggestion(this)">Benefits of meditation</div>
+        <div class="suggestion" onclick="useSuggestion(this)">How do LLMs work?</div>
+        <div class="suggestion" onclick="useSuggestion(this)">India EV market 2025</div>
+        <div class="suggestion" onclick="useSuggestion(this)">Intermittent fasting science</div>
+      </div>
+    </div>`;
+        closeSidebar();
+      }
+
+      // ── Send message ─────────────────────────────────────────
+      async function sendMessage() {
+        const input = $("queryInput");
+        const query = input.value.trim();
+        if (!query || state.isLoading) return;
+
+        input.value = "";
+        autoResize(input);
+        $("emptyState")?.remove();
+        setLoading(true);
+
+        appendUserMessage(query);
+
+        if (!state.currentConvId) {
+          $("topbarTitle").textContent = query.slice(0, 50);
+        }
+
+        // Create progress + agent message areas
+        const progressArea = el("div", "progress-area");
+        const agentMsg = el("div", "message agent");
+        const msgHeader = el("div", "msg-header");
+        msgHeader.innerHTML = `<div class="msg-avatar agent">🤖</div><span>Aria</span>`;
+        const msgBody = el("div", "msg-body");
+        agentMsg.appendChild(msgHeader);
+        agentMsg.appendChild(msgBody);
+
+        $("chatArea").appendChild(progressArea);
+        $("chatArea").appendChild(agentMsg);
+        scrollToBottom();
+
+        // Active tool rows
+        const activeTools = {};
+        let fullText = "";
+        let isStreaming = false;
+
+        try {
+          const response = await fetch("/research/stream", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              query,
+              conversationId: state.currentConvId,
+            }),
+          });
+
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const parts = buffer.split("\n\n");
+            buffer = parts.pop();
+
+            for (const part of parts) {
+              const lines = part.split("\n");
+              let event = null;
+              let data = null;
+
+              for (const line of lines) {
+                if (line.startsWith("event: ")) event = line.slice(7).trim();
+                if (line.startsWith("data: ")) {
+                  try {
+                    data = JSON.parse(line.slice(6));
+                  } catch {}
+                }
+              }
+
+              if (!event || !data) continue;
+
+              switch (event) {
+                case "conv_id":
+                  // Set ID on first turn — subsequent turns already have it
+                  if (!state.currentConvId) {
+                    state.currentConvId = data.conversationId;
+                  }
+                  break;
+
+                case "intent":
+                  // Optionally show intent in topbar for debugging
+                  // $("topbarTitle").textContent += ` · ${data.intent.label}`;
+                  break;
+
+                case "tool_start": {
+                  const label = TOOL_LABELS[data.tool] || `🔧 ${data.tool}`;
+                  const detail =
+                    data.tool === "search_web" && data.args?.query
+                      ? `: "${data.args.query.slice(0, 45)}"`
+                      : "";
+                  const row = el("div", "tool-row");
+                  row.innerHTML = `<div class="spinner"></div><span>${label}${detail}</span>`;
+                  progressArea.appendChild(row);
+                  activeTools[data.tool] = row;
+                  scrollToBottom();
+                  break;
+                }
+
+                case "tool_done": {
+                  const row = activeTools[data.tool];
+                  if (row) {
+                    row.classList.add("done");
+                    row.querySelector(".spinner").textContent = "✓";
+                  }
+                  break;
+                }
+
+                case "token": {
+                  if (!isStreaming) {
+                    isStreaming = true;
+                    progressArea.style.display = "none";
+                  }
+                  fullText += data.token;
+                  msgBody.innerHTML =
+                    marked.parse(fullText) + '<span class="cursor"></span>';
+                  // Highlight any code blocks
+                  msgBody
+                    .querySelectorAll("pre code")
+                    .forEach((b) => hljs.highlightElement(b));
+                  scrollToBottom();
+                  break;
+                }
+
+                case "done": {
+                  // Final render — remove cursor
+                  msgBody.innerHTML = marked.parse(fullText);
+                  msgBody
+                    .querySelectorAll("pre code")
+                    .forEach((b) => hljs.highlightElement(b));
+                  progressArea.remove();
+                  setLoading(false);
+                  await loadConversationList();
+                  scrollToBottom();
+                  break;
+                }
+
+                case "error": {
+                  msgBody.innerHTML = `<span style="color:var(--red)">❌ ${data.message}</span>`;
+                  progressArea.remove();
+                  setLoading(false);
+                  break;
+                }
+              }
+            }
+          }
+        } catch (err) {
+          msgBody.innerHTML = `<span style="color:var(--red)">❌ ${err.message}</span>`;
+          progressArea.remove();
+          setLoading(false);
+        }
+      }
+
+      // ── Append messages ─────────────────────────────────────
+      function appendUserMessage(text) {
+        const msg = el("div", "message user");
+        msg.innerHTML = `
+    <div class="msg-header">
+      <div class="msg-avatar user">👤</div>
+      <span>You</span>
+    </div>
+    <div class="msg-body">${escHtml(text)}</div>
+  `;
+        $("chatArea").appendChild(msg);
+        scrollToBottom();
+      }
+
+      function appendAgentMessage(markdown, withCursor = false) {
+        const msg = el("div", "message agent");
+        const body = el("div", "msg-body");
+        body.innerHTML =
+          marked.parse(markdown) +
+          (withCursor ? '<span class="cursor"></span>' : "");
+        body
+          .querySelectorAll("pre code")
+          .forEach((b) => hljs.highlightElement(b));
+
+        msg.innerHTML = `<div class="msg-header">
+    <div class="msg-avatar agent">🤖</div>
+    <span>Aria</span>
+  </div>`;
+        msg.appendChild(body);
+        $("chatArea").appendChild(msg);
+      }
+
+      // ── Helpers ─────────────────────────────────────────────
+      function setLoading(loading) {
+        state.isLoading = loading;
+        $("sendBtn").disabled = loading;
+        $("queryInput").disabled = loading;
+      }
+
+      function scrollToBottom() {
+        const area = $("chatArea");
+        area.scrollTop = area.scrollHeight;
+      }
+
+      function autoResize(el) {
+        el.style.height = "auto";
+        el.style.height = Math.min(el.scrollHeight, 160) + "px";
+      }
+
+      function handleKey(e) {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          sendMessage();
+        }
+      }
+
+      function useSuggestion(el) {
+        $("queryInput").value = el.textContent;
+        sendMessage();
+      }
+
+      function escHtml(text) {
+        return text
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      async function handleFileUpload(input) {
+        const file = input.files[0];
+        if (!file) return;
+
+        // Show uploading toast
+        showToast(`📤 Uploading ${file.name}...`);
+
+        const formData = new FormData();
+        formData.append("file", file);
+
+        try {
+          const response = await fetch("/upload", {
+            method: "POST",
+            body: formData,
+          });
+
+          const result = await response.json();
+
+          if (result.success) {
+            showToast(`✅ ${result.message}`, 4000);
+
+            // Auto-ask about the document
+            $("queryInput").value =
+              `I just uploaded "${file.name}". Please give me a summary of it.`;
+            $("queryInput").focus();
+          } else {
+            showToast(`❌ Upload failed: ${result.error}`, 4000);
+          }
+        } catch (err) {
+          showToast(`❌ Upload error: ${err.message}`, 4000);
+        }
+
+        // Reset input so same file can be re-uploaded
+        input.value = "";
+      }
+
+      function showToast(message, duration = 3000) {
+        // Remove existing toast
+        document.querySelector(".upload-toast")?.remove();
+
+        const toast = document.createElement("div");
+        toast.className = "upload-toast";
+        toast.textContent = message;
+        document.body.appendChild(toast);
+
+        setTimeout(() => toast.remove(), duration);
+      }
+
+      // ── Init ─────────────────────────────────────────────────
+      loadConversationList();
+      $("queryInput").focus();
+    </script>
+  </body>
 </html>

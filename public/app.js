@@ -32,18 +32,9 @@ form.addEventListener("submit", async (e) => {
         thinkingEl.remove();
 
         if (res.ok) {
-            // If the response is structured (toolCalls + content)
-            if (data.toolCalls && Array.isArray(data.toolCalls)) {
-                data.toolCalls.forEach(tc => {
-                    addToolCall(tc);
-                });
-                addMessage(data.content, "bot");
-            } else {
-                // fallback for old answer format
-                addMessage(data.answer || data.content, "bot");
-            }
+            addMessage(data, "bot");
         } else {
-            addMessage("❌ " + (data.error || "Something went wrong."), "bot");
+            addMessage("❌ " + (data || "Something went wrong."), "bot");
         }
     } catch (err) {
         thinkingEl.remove();

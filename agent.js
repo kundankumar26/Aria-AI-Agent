@@ -1,4 +1,4 @@
-import { buildSystemPrompt } from "./prompts/systemPrompt.js";
+import { buildSystemPrompt, buildEnhancedMessage } from "./prompts/systemPrompt.js";
 import {
     loadUserProfile,
     findRelatedNotes
@@ -8,29 +8,44 @@ import {
     toolFunctions
 } from "./tools/index.js";
 import { runAgentLoop } from "./utils/agentLoop.js";
-
+import { planResearch } from "./utils/planner.js";
+import { logger } from "./utils/logger.js";
+import { reviewResponse } from "./utils/reviewer.js";
+import { detectQueryIntent } from "./utils/intentDetector.js";
+import { runStreamingAgentLoop } from "./utils/streamingAgentLoop.js";
+import { loadCache } from "./utils/cache.js";
 
 export async function runAgent(userMessage) {
 
     // ── Startup ────────────────────────────────────────
-    console.log("\n🔍 Loading profile and past research...");
+    logger.info("\n🔍 Loading profile and past research...");
 
-    const userProfile = await loadUserProfile();
-    const relatedNotes = await findRelatedNotes(userMessage);
-    const systemPrompt = buildSystemPrompt(userProfile, relatedNotes);
+    // const userProfile = await loadUserProfile();
+    // const relatedNotes = await findRelatedNotes(userMessage);
+    const [userProfile, relatedNotes] = await Promise.all([
+        loadUserProfile(),
+        findRelatedNotes(userMessage)
+    ]);
+    let systemPrompt = buildSystemPrompt(userProfile, relatedNotes);
 
-    // add planning step before main loop
-    const plan = await planResearch(userMessage);
+    // ── Research planning ────────────────────────────────
+    const plan = await planResearch(userMessage, userProfile);
 
-    // Inject plan into user message
-    const enhancedMessage = plan
-        ? `Research this topic: "${userMessage}"
-         
-         Research plan to follow:
-         Sub-questions: ${plan.subQuestions.join(", ")}
-         Search queries to use: ${plan.searchQueries.join(", ")}
-         Prioritise these source types: ${plan.sourceTypes.join(", ")}`
-        : userMessage;
+    // ── Detect query intent ───────────────────────────────
+    const intent = detectQueryIntent(userMessage);
+
+    logger.info(`Query intent: ${intent.type} — target ${intent.targetWords} words`);
+
+    const depthInstruction = `
+        Response depth for this query: ${intent.type}
+        Target word count: ${intent.targetWords} words
+        Number of sections: ${intent.sections}
+    `;
+
+    systemPrompt += "\n\n" + depthInstruction;
+
+    // ── Build enhanced message with plan ─────────────────
+    const enhancedMessage = buildEnhancedMessage(userMessage, plan);
 
     // ── Initialise messages ────────────────────────────
     const messages = [
@@ -38,35 +53,73 @@ export async function runAgent(userMessage) {
         { role: "user", content: enhancedMessage }
     ];
 
-    console.log("🤖 Aria is thinking...\n");
+    logger.info("🤖 Aria is thinking...\n");
 
     if (relatedNotes) {
-        console.log("📂 Found related past research — loading context...\n");
+        logger.info("📂 Found related past research — loading context...\n");
     }
 
     // ── Run the agent loop ─────────────────────────────
     const answer = await runAgentLoop(messages, toolDefinitions, toolFunctions);
 
+    // ── Self-review ───────────────────────────────────────
+    const review = await reviewResponse(answer, userMessage, userProfile);
+
+    if (review) {
+        logger.info(`Review score: ${review.quality_score}/10 | verdict: ${review.verdict}`);
+
+        if (review.issues?.length > 0) {
+            logger.info(`Issues found: ${review.issues.join(", ")}`);
+        }
+
+        // If quality is low — add improvement note to response
+        if (review.quality_score < 6 && review.improvement_note) {
+            answer += `\n\n---\n⚠️ *Note: ${review.improvement_note}*`;
+        }
+
+        // Log quality metrics for your own tracking
+        logger.info(`Word count: ${review.word_count} | Has data: ${review.has_specific_data}`);
+    }
+
     return answer;
 }
 
-async function planResearch(topic) {
-    const response = await client.chat.completions.create({
-        model: "gpt-4o",
-        temperature: 0.2,
-        messages: [{
-            role: "user",
-            content: `You are a research planner. For the topic "${topic}":
-                1. Break it into 3-4 key sub-questions to investigate
-                2. Suggest 4 specific search queries (varied angles)
-                3. Identify what type of sources would be most credible
-                Return as JSON: { subQuestions, searchQueries, sourceTypes }`
-        }]
-    });
+export async function runAgentStreaming(userMessage, callbacks = {}) {
 
-    try {
-        return JSON.parse(response.choices[0].message.content);
-    } catch {
-        return null;
-    }
+    let userProfile, relatedNotes;
+    await Promise.all([
+        loadCache(),
+        loadUserProfile().then(p => userProfile = p),
+        findRelatedNotes(userMessage).then(n => relatedNotes = n)
+    ]);
+
+    const plan = await planResearch(userMessage, userProfile);
+    let systemPrompt = buildSystemPrompt(userProfile, relatedNotes);
+    const enhanced = buildEnhancedMessage(userMessage, plan);
+
+    // ── Detect query intent ───────────────────────────────
+    const intent = detectQueryIntent(userMessage);
+
+    logger.info(`Query intent: ${intent.type} — target ${intent.targetWords} words`);
+
+    const depthInstruction = `
+        Response depth for this query: ${intent.type}
+        Target word count: ${intent.targetWords} words
+        Number of sections: ${intent.sections}
+    `;
+
+    systemPrompt += "\n\n" + depthInstruction;
+
+
+    const messages = [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: enhanced }
+    ];
+
+    return await runStreamingAgentLoop(
+        messages,
+        toolDefinitions,
+        toolFunctions,
+        callbacks
+    );
 }

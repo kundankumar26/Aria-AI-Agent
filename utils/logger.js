@@ -34,10 +34,11 @@ export const logger = {
     },
 
     // Log tool call + result
-    tool: (name, args, result) => {
+    tool: (name, args, result, durationMs) => {
+        const dur = (typeof durationMs === 'number') ? ` [${durationMs} ms]` : '';
         if (LEVEL >= 3)
-            console.log(`  🔧 ${name}(${JSON.stringify(args).slice(0, 80)})`);
+            console.log(`  🔧 ${name}(${JSON.stringify(args).slice(0, 80)})${dur}`);
         if (LEVEL >= 4)
-            console.log(`     → ${String(result).slice(0, 150)}`);
+            console.log(`     → ${String(result).slice(0, 150)}${dur}`);
     }
 };

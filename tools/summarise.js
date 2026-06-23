@@ -30,7 +30,7 @@ export async function summarise({ text, max_words = 150 }) {
         const prompt = `Summarise the following text in clear bullet points (max ${max_words} words). Keep key facts and numbers.`;
         const truncatedText = text.slice(0, 6000);
         const response = await client.chat.completions.create({
-            model: "gpt-5-nano",    // cheaper model for simple task
+            model: "gpt-4o-mini",    // cheaper model for simple task
             temperature: 1,
             max_tokens: Math.max(150, max_words * 2),
             messages: [

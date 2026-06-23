@@ -1,20 +1,29 @@
 import "dotenv/config";
+import { getCached, setCached } from "../utils/cache.js";
+import { logger } from "../utils/logger.js";
 
 export const searchWebTool = {
     type: "function",
     function: {
         name: "search_web",
-        description: "Search the internet for current, up-to-date information. Only use this when the knowledge base has no relevant results. Prefer specific, keyword-rich queries for better results.",
+        description: `Search the internet AND retrieve full content from
+                  top results in a single call. Use this instead of
+                  read_url for standard research — it's faster.
+                  Only use read_url for specific URLs not in search results.`,
         parameters: {
             type: "object",
             properties: {
                 query: {
                     type: "string",
-                    description: "Search query — use specific keywords, avoid vague or broad terms"
+                    description: "Search query — specific keywords work best"
                 },
                 max_results: {
                     type: "number",
-                    description: "Number of results to return (default 2, max 5)"
+                    description: "Results to return (default 5, max 8)"
+                },
+                include_full_content: {
+                    type: "boolean",
+                    description: "Set true to get full article text (default true)"
                 }
             },
             required: ["query"]
@@ -22,7 +31,23 @@ export const searchWebTool = {
     }
 };
 
-export async function search_web({ query, max_results = 2 }) {
+export async function search_web({ query, max_results = 2, include_full_content = true }) {
+
+    // ── Check cache first ──────────────────────────────
+    const cached = getCached(query);
+    if (cached) {
+        logger.info(`⚡ Cache hit — skipping API call for "${query}"`);
+        return cached + "\n\n[Note: Results cached from earlier today]";
+    }
+
+    const result = await fetchFromTavily(query, max_results, include_full_content);
+
+    await setCached(query, result);
+
+    return result;
+}
+
+async function fetchFromTavily(query, max_results, include_full_content) {
     const response = await fetch("https://api.tavily.com/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -31,8 +56,9 @@ export async function search_web({ query, max_results = 2 }) {
             query,
             max_results: Math.min(max_results, 5),
             search_depth: "advanced",
-            include_raw_content: true,
-            include_answer: true
+            include_raw_content: include_full_content,
+            include_answer: true,
+            include_images: false
         })
     });
 
@@ -48,17 +74,27 @@ export async function search_web({ query, max_results = 2 }) {
 
     // Filter low-quality results
     const filtered = data.results
-        .filter(r => r.score > 0.5 && r.content?.length > 100)
+        .filter(r => r.score > 0.4)
         .slice(0, max_results);
 
-    if (filtered.length === 0) {
-        return `No high-quality results found for "${query}". Try different search terms.`;
-    }
+    // Build rich result with full content included
+    const formatted = filtered.map((r, i) => {
+        const content = include_full_content
+            ? (r.raw_content || r.content || "").slice(0, 2000)
+            : r.content?.slice(0, 300) || "";
 
-    return filtered.map((r, i) =>
-        `[${i + 1}] ${r.title}
-     URL: ${r.url}
-     Relevance: ${Math.round(r.score * 100)}%
-     Content: ${r.content.slice(0, 2000)}...`
-    ).join("\n\n");
+        return `[${i + 1}] ${r.title}
+            URL: ${r.url}
+            Published: ${r.published_date || "Unknown"}
+            Relevance: ${Math.round(r.score * 100)}%
+
+            ${content}`;
+    }).join("\n\n═══════════════════════════════\n\n");
+
+    // Include Tavily's own answer if available (bonus context)
+    const tavilyAnswer = data.answer
+        ? `TAVILY SUMMARY: ${data.answer}\n\n═══════════════════════════════\n\n`
+        : "";
+
+    return tavilyAnswer + formatted;
 }

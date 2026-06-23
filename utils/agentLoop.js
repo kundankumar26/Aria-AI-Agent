@@ -11,7 +11,6 @@ export async function runAgentLoop(messages, toolDefs, toolFns) {
     let iterations = 0;
     let totalTokens = 0;
     let recentCalls = [];
-    let toolCallLog = [];
     const LIMITS = {
         maxIterations: 30,
         maxTokens: 1000000,
@@ -19,17 +18,15 @@ export async function runAgentLoop(messages, toolDefs, toolFns) {
         maxResultChars: 2000,
         timeoutMs: 900000
     };
+    
+    logger.step(iterations, "Calling LLM...");
 
     while (true) {
-        logger.step(iterations, "Calling LLM...");
 
         // ── Safety: iteration + token limits ────────────────
         iterations++;
         if (iterations > LIMITS.maxIterations) {
-            return {
-                toolCalls: toolCallLog,
-                content: "⚠️ Reached max steps. Try a more specific question."
-            };
+            return "⚠️ Reached max steps. Try a more specific question.";
         }
         if (totalTokens > LIMITS.maxTokens) {
             // Collect all assistant and tool message contents
@@ -42,22 +39,19 @@ export async function runAgentLoop(messages, toolDefs, toolFns) {
             let summary = "";
             try {
                 const summaryResponse = await client.chat.completions.create({
-                    model: "gpt-5-nano",
+                    model: "gpt-4o-mini",
                     messages: [
                         { role: "system", content: "Summarize the following results for the user in a clear and concise way." },
                         { role: "user", content: collected.slice(0, 12000) } // limit to 12k chars for context
                     ],
-                    temperature: 1
+                    temperature: 0.1
                 });
                 summary = summaryResponse.choices[0].message.content;
             } catch (err) {
                 summary = "(Could not generate summary. Here are the raw results:)\n\n" + collected;
             }
 
-            return {
-                toolCalls: toolCallLog,
-                content: `⚠️ Reached processing budget. Here's a summary of what I found so far.\n\n${summary}`
-            };
+            return `⚠️ Reached processing budget. Here's a summary of what I found so far.\n\n${summary}`;
         }
 
         // ── Trim messages ───────────────────────────────────
@@ -69,7 +63,7 @@ export async function runAgentLoop(messages, toolDefs, toolFns) {
             response = await withRetry(
                 () => withTimeout(
                     () => client.chat.completions.create({
-                        model: "gpt-5-nano",
+                        model: "gpt-4o-mini",
                         messages: trimmed,
                         tools: toolDefs.length > 0 ? toolDefs : undefined,
                         temperature: 1
@@ -91,10 +85,7 @@ export async function runAgentLoop(messages, toolDefs, toolFns) {
 
         // ── Done ────────────────────────────────────────────
         if (choice.finish_reason === "stop") {
-            return {
-                toolCalls: toolCallLog,
-                content: message.content
-            };
+            return message.content;
         }
 
         // ── Tool calls ──────────────────────────────────────
@@ -150,17 +141,21 @@ export async function runAgentLoop(messages, toolDefs, toolFns) {
 
                 }
 
-                logger.tool(fnName, fnArgs, content);
+                logger.tool(fnName, fnArgs, content, durationMs);
 
-                return { toolCall, fnName, fnArgs, content, durationMs };
+                return { toolCall, fnName, fnArgs, content };
             }));
 
             // Push all results to messages in order
             for (const r of results) {
-                if (!r.skip) {
-                    toolCallLog.push({ name: r.fnName, args: r.fnArgs, durationMs: r.durationMs, output: r.content });
+                // r is {status, value} or {status, reason}
+                if (r.status === 'fulfilled' && r.value) {
+                    const v = r.value;
+                    messages.push({ role: "tool", fnName: v.fnName, fnArgs: v.fnArgs, tool_call_id: v.toolCall.id, content: v.content });
+                } else if (r.status === 'rejected') {
+                    // Optionally log or handle rejected tool calls
+                    messages.push({ role: "tool", tool_call_id: r.value?.toolCall?.id || "unknown", content: `Tool call failed: ${r.value?.message}` });
                 }
-                messages.push({ role: "tool", tool_call_id: r.toolCall.id, content: r.content });
             }
         }
     }
