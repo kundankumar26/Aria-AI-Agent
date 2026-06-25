@@ -1,0 +1,6 @@
+node_modules
+.env
+.git
+*.log
+research-notes
+vector-store.json
